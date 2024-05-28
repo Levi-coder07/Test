@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Series Clustering</title>
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <style>
+        .line {
+            fill: none;
+            stroke-width: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div id="chart"></div>
+    <script>
+        // Load the CSV data
+        d3.csv("cluster_results.csv").then(function(data) {
+            console.log("Data loaded:", data); // Debugging statement
+
+            // Process the data
+            const maxValuesCount = d3.max(data, d => Object.keys(d).filter(key => key.startsWith('Valor_')).length);
+            const completeData = data.filter(d => Object.keys(d).filter(key => key.startsWith('Valor_')).length === maxValuesCount);
+            const clusters = d3.group(completeData, d => d.clusterNumero);
+            console.log("Clusters:", clusters); // Debugging statement
+
+            // Set up the SVG dimensions
+            const margin = {top: 20, right: 20, bottom: 30, left: 50},
+                  width = 960 - margin.left - margin.right,
+                  height = 500 - margin.top - margin.bottom;
+
+            const svg = d3.select("#chart").append("svg")
+                .attr("width", width + margin.left + margin.right)
+                .attr("height", height + margin.top + margin.bottom)
+              .append("g")
+                .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+            // Set up scales
+            const x = d3.scaleLinear()
+                .domain([0, maxValuesCount - 1])
+                .range([0, width]);
+
+            const y = d3.scaleLinear()
+                .domain([d3.min(completeData, d => d3.min(Object.keys(d).filter(key => key.startsWith('Valor_')).map(key => +d[key]))),
+                         d3.max(completeData, d => d3.max(Object.keys(d).filter(key => key.startsWith('Valor_')).map(key => +d[key])))])
+                .nice()
+                .range([height, 0]);
+
+            // Set up the line generator
+            const line = d3.line()
+                .x((d, i) => x(i))
+                .y(d => y(d));
+
+            // Define color scale
+            const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+            // Plot each cluster
+            clusters.forEach((values, cluster) => {
+                const clusterGroup = svg.append("g");
+
+                for (let i = 0; i < values.length; i++) {
+                    const d = values[i];
+                    const timeSeries = Object.keys(d)
+                        .filter(key => key.startsWith('Valor_')  && +d[key] !== 0 )
+                        .map(key => +d[key]);
+                    console.log(timeSeries)
+                    
+                    clusterGroup.append("path")
+                        .datum(timeSeries)
+                        .attr("class", "line")
+                        .attr("d", line)
+                        .attr("stroke", color(cluster))
+                        .attr("data-subject", d.Sujeto);  
+                }
+
+                clusterGroup.append("text")
+                    .attr("x", width - 40)
+                    .attr("y", y(d3.mean(values, d => +d['Valor_0'])))
+                    .attr("dy", ".35em")
+                    .attr("fill", color(cluster))
+                    .text(`Cluster ${cluster}`);
+            });
+
+            // Add the axes
+            svg.append("g")
+                .attr("transform", "translate(0," + height + ")")
+                .call(d3.axisBottom(x));
+
+            svg.append("g")
+                .call(d3.axisLeft(y));
+        }).catch(function(error) {
+            console.error("Error loading the data:", error); // Debugging statement
+        });
+    </script>
+</body>
+</html>
